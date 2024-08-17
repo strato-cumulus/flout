@@ -153,6 +153,7 @@ void * flout_coordinator_registration_thread_fn(void *msg)
     int rpc_socket_fd = 0;
     int worker_rpc_connection_fd = 0;
 
+    const int socket_queue_size = 8;
     const int char_buffer_size = 1024;
     char char_buffer[char_buffer_size];
 
@@ -161,26 +162,10 @@ void * flout_coordinator_registration_thread_fn(void *msg)
     int port;
 
     struct sockaddr_in6 *server_addr = (struct sockaddr_in6 *) msg;
-    flout_parse_address(server_addr, address_buffer, INET6_ADDRSTRLEN);
 
-    // Set up an outbound socket to communicate with workers requesting registration.
-    log_message(INFO, log_name, "setting up listener at %s", address_buffer);
-    rpc_socket_fd = socket(AF_INET6, SOCK_STREAM, 0);
+    rpc_socket_fd = flout_create_outbound_socket((struct sockaddr *)server_addr, socket_queue_size, char_buffer, char_buffer_size);
     if (rpc_socket_fd < 0) {
-        log_message(ERROR, log_name, "outbound socket creation failed: %s", strerror(errno));
-        return NULL;
-    }
-    ret_code = bind(rpc_socket_fd, (struct sockaddr*)server_addr, sizeof(struct sockaddr_in6));
-    if (ret_code < 0) {
-        log_message(ERROR, log_name, "outbound socket failed to bind at %s: %s", address_buffer, strerror(errno));
-        close(rpc_socket_fd);
-        return NULL;
-    }
-    // Queue up to 8 incoming connections from workers awaiting registration.
-    ret_code = listen(rpc_socket_fd, 8);
-    if (ret_code < 0) {
-        log_message(ERROR, log_name, "listening on %s failed: %s", address_buffer, strerror(errno));
-        close(rpc_socket_fd);
+        log_message(INFO, log_name, "Failed to create outbound socket: %s", strerror(errno));
         return NULL;
     }
 

@@ -45,3 +45,33 @@ void flout_parse_address(struct sockaddr_in6 * addr, char * buffer, socklen_t bu
     // Make sure that it's always a valid zero-terminated string.
     buffer[buffer_size-1] = '\0';
 }
+
+int flout_create_outbound_socket(struct sockaddr * server_addr, const int queue_size, char * err_buf, const int err_buf_len)
+{
+    const char * log_name = "flout_create_outbound_socket";
+
+    int socket_fd;
+    int ret_code;
+
+    // Set up an outbound socket to communicate with workers requesting registration.
+    socket_fd = socket(AF_INET6, SOCK_STREAM, 0);
+    if (socket_fd < 0) {
+        snprintf(err_buf, err_buf_len, "outbound socket creation failed: %s", strerror(errno));
+        return socket_fd;
+    }
+    ret_code = bind(socket_fd, server_addr, sizeof(struct sockaddr_in6));
+    if (ret_code < 0) {
+        snprintf(err_buf, err_buf_len, "outbound socket failed to bind at %s: %s", server_addr, strerror(errno));
+        close(socket_fd);
+        return ret_code;
+    }
+
+    ret_code = listen(socket_fd, queue_size);
+    if (ret_code < 0) {
+        snprintf(err_buf, err_buf_len, "listening on %s failed: %s", server_addr, strerror(errno));
+        close(socket_fd);
+        return ret_code;
+    }
+
+    return socket_fd;
+}

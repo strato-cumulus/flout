@@ -225,13 +225,56 @@ void * flout_coordinator_comms_thread_fn(void * msg)
     }
 }
 
+/**
+ * Communication with clients is handled here.
+ * Clients issue commands that control the cluster.
+ */
+void * flout_coordinator_ui_thread_fn(void * msg)
+{
+    const char * log_name = "flout_coordinator_ui_thread_fn";
+
+    int ui_socket_fd = 0;
+    int client_socket_fd = 0;
+
+    const int socket_queue_size = 8;
+    const int char_buffer_size = 1024;
+    char char_buffer[char_buffer_size];
+
+    int ret_code = 0;
+    char address_buffer[INET6_ADDRSTRLEN];
+    int port;
+
+    struct sockaddr_in6 *server_addr = (struct sockaddr_in6 *) msg;
+
+    ui_socket_fd = flout_create_outbound_socket((struct sockaddr *)server_addr, socket_queue_size, char_buffer, char_buffer_size);
+    if (ui_socket_fd < 0) {
+        log_message(INFO, log_name, "Failed to create outbound socket: %s", strerror(errno));
+        return NULL;
+    }
+
+    struct sockaddr_in6 addr_buffer = {0};
+    socklen_t addr_buffer_size = sizeof(addr_buffer);
+
+    while (1) {
+        client_socket_fd = accept(ui_socket_fd, (struct sockaddr *) &addr_buffer, &addr_buffer_size);
+
+        flout_parse_address(&addr_buffer, char_buffer, char_buffer_size);
+        printf("Incoming connection from %s\n", char_buffer);
+
+        close(client_socket_fd);
+    }
+}
+
 
 int main(int argc, char* argv[])
 {
     flout_coordinator_init();
 
     struct sockaddr_in6 registration_addr;
+    struct sockaddr_in6 ui_addr;
+
     flout_init_sockaddr_in6(&registration_addr, "::1", 8122);
+    flout_init_sockaddr_in6(&ui_addr, "::1", 8080);
 
     pthread_t registration_thread;
     pthread_create(&registration_thread, NULL, flout_coordinator_registration_thread_fn, (void*) &registration_addr);
@@ -239,8 +282,12 @@ int main(int argc, char* argv[])
     pthread_t coordinator_rpc_thread;
     pthread_create(&coordinator_rpc_thread, NULL, flout_coordinator_comms_thread_fn, NULL);
 
+    pthread_t coordinator_ui_thread;
+    pthread_create(&coordinator_ui_thread, NULL, flout_coordinator_ui_thread_fn, (void*) &ui_addr);
+
     pthread_join(registration_thread, NULL);
     pthread_join(coordinator_rpc_thread, NULL);
+    pthread_join(coordinator_ui_thread, NULL);
 
     return 0;
 }

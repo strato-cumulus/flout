@@ -13,7 +13,7 @@
 
 #define MAX_CONNECTED_WORKERS 8
 
-typedef struct {
+typedef struct _flout_worker_slot_t {
     int status;
     int socket_fd;
     suseconds_t last_activity_ts;

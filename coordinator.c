@@ -14,11 +14,7 @@ flout_worker_slot_t connected_workers[MAX_CONNECTED_WORKERS];
  */
 void flout_coordinator_init()
 {
-    int i;
-
-    for (i = 0; i < MAX_CONNECTED_WORKERS; ++i) {
-        connected_workers[i].status = SFLOUT_FREE;
-    }
+    memset(connected_workers, 0, (sizeof (struct _flout_worker_slot_t)) * MAX_CONNECTED_WORKERS);
 }
 
 

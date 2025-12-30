@@ -88,7 +88,17 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
 
     if (ret_code != 0) {
 
-        log_message(INFO, log_name, "received commands from worker %d", worker_id);
+        int bytes_read = 0;
+        int current_pos = 0;
+        while ((bytes_read = read(worker_slot->socket_fd, buffer, buffer_size - current_pos)) >= 0) {
+            current_pos += bytes_read;
+            if (current_pos >= buffer_size) {
+                break;
+            }
+        }
+        buffer[buffer_size-1] = '\0';
+
+        log_message(DEBUG, log_name, "received commands from worker %d, ret_code %d", worker_id, ret_code);
 
         if (read(worker_slot->socket_fd, buffer, buffer_size) < 0 && errno != EAGAIN) {
             log_message(ERROR, log_name, "failed to fetch commands from worker %d: %s",

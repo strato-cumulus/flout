@@ -90,7 +90,7 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
 
         log_message(INFO, log_name, "received commands from worker %d", worker_id);
 
-        if (read(worker_slot->socket_fd, buffer, buffer_size) < 0) {
+        if (read(worker_slot->socket_fd, buffer, buffer_size) < 0 && errno != EAGAIN) {
             log_message(ERROR, log_name, "failed to fetch commands from worker %d: %s",
                 worker_id, strerror(errno));
             return -1;

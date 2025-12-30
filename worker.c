@@ -17,7 +17,10 @@ int worker_id = -1;
  */
 void * flout_worker_heartbeat_fn(void * msg)
 {
-    const char * log_name = "flout_worker_heartbeat_fn";
+    static const char * log_name = "flout_worker_heartbeat_fn";
+    const int cmd_id = 0;
+
+    int counter = 0;
 
     log_message(INFO, log_name, "initializing heartbeat thread");
 
@@ -28,13 +31,14 @@ void * flout_worker_heartbeat_fn(void * msg)
 
     // For now, we'll use sleep() that has a full seconds precision.
     time_t interval_s = params->interval.tv_sec;
-    snprintf(char_buffer, char_buffer_size, "%d", worker_id);
 
     while (1) {
-        log_message(DEBUG, log_name, "hearbeat");
+        snprintf(char_buffer, char_buffer_size, "%d\t%d\t%d\0", cmd_id, worker_id, counter);
+        log_message(DEBUG, log_name, "Sending heartbeat: %s", char_buffer);
         if (write(rpc_socket_fd, char_buffer, char_buffer_size) < 0) {
             log_message(INFO, log_name, "failed to send heartbat: %s", strerror(errno));
         }
+        counter += 1;
         sleep(interval_s);
     }
 }

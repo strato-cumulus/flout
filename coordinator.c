@@ -96,6 +96,8 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
             return -1;
         }
 
+        log_message(INFO, log_name, "Command buffer: %s", buffer);
+
         // Mark this worker as alive.
         worker_slot->last_activity_ts = get_current_time_ms();
 

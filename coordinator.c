@@ -86,11 +86,11 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
 
     int ret_code = flout_check_socket_read(worker_slot->socket_fd, 0);
 
-    if (ret_code != 0) {
+    if (ret_code >= 0) {
 
         int bytes_read = 0;
         int current_pos = 0;
-        while ((bytes_read = read(worker_slot->socket_fd, buffer, buffer_size - current_pos)) >= 0) {
+        while ((bytes_read = read(worker_slot->socket_fd, buffer, buffer_size - current_pos)) > 0) {
             current_pos += bytes_read;
             if (current_pos >= buffer_size) {
                 break;
@@ -98,23 +98,24 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
         }
         buffer[buffer_size-1] = '\0';
 
-        log_message(DEBUG, log_name, "received commands from worker %d, ret_code %d", worker_id, ret_code);
+        // If writer position did not advance, it means that there was no command sent.
+        if (current_pos == 0) {
+            log_message(DEBUG, log_name, "no command from worker %d", worker_id, ret_code);
+            return 0;
+        }
 
-        if (read(worker_slot->socket_fd, buffer, buffer_size) < 0 && errno != EAGAIN) {
+        log_message(DEBUG, log_name, "received a command from worker %d: %s", worker_id, buffer);
+
+        if (bytes_read < 0 && errno != EAGAIN) {
             log_message(ERROR, log_name, "failed to fetch commands from worker %d: %s",
                 worker_id, strerror(errno));
             return -1;
         }
 
-        log_message(INFO, log_name, "Command buffer: %s", buffer);
-
         // Mark this worker as alive.
         worker_slot->last_activity_ts = get_current_time_ms();
 
         // There are no known commands yet, so finish for now.
-    }
-    else {
-        log_message(INFO, log_name, "no commands from worker %d", worker_id);
     }
 
     return 0;

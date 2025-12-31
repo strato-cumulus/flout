@@ -84,33 +84,27 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
 {
     const char * log_name = "flout_handle_rpc";
 
-    int ret_code = flout_check_socket_read(worker_slot->socket_fd, 0);
+    if (worker_slot->status == SFLOUT_FREE) {
+        return 1;
+    }
 
-    if (ret_code >= 0) {
+    if (flout_check_socket_read(worker_slot->socket_fd, 0) >= 0) {
 
-        int bytes_read = 0;
-        int current_pos = 0;
-        while ((bytes_read = read(worker_slot->socket_fd, buffer, buffer_size - current_pos)) > 0) {
-            current_pos += bytes_read;
-            if (current_pos >= buffer_size) {
-                break;
-            }
-        }
-        buffer[buffer_size-1] = '\0';
+        int bytes_received = flout_socket_read(worker_slot->socket_fd, buffer, buffer_size);
 
         // If writer position did not advance, it means that there was no command sent.
-        if (current_pos == 0) {
-            log_message(DEBUG, log_name, "no command from worker %d", worker_id, ret_code);
+        if (bytes_received == 0) {
+            log_message(DEBUG, log_name, "no command from worker %d", worker_id);
             return 0;
         }
 
-        log_message(DEBUG, log_name, "received a command from worker %d: %s", worker_id, buffer);
-
-        if (bytes_read < 0 && errno != EAGAIN) {
+        if (bytes_received < 0) {
             log_message(ERROR, log_name, "failed to fetch commands from worker %d: %s",
                 worker_id, strerror(errno));
             return -1;
         }
+
+        log_message(DEBUG, log_name, "received a command from worker %d: %s", worker_id, buffer);
 
         // Mark this worker as alive.
         worker_slot->last_activity_ts = get_current_time_ms();
@@ -142,7 +136,7 @@ int flout_handle_liveness(const int worker_id, flout_worker_slot_t * worker_slot
     // Otherwise, the connection is closed and the slot is freed.
     log_message(INFO, log_name, "worker %d is gone, last activity was %d ms ago, disconnecting", worker_id, delta);
     close(worker_slot->socket_fd);
-    worker_slot->status = SFLOUT_FREE;
+    memset(&connected_workers[worker_id], 0, (sizeof (struct _flout_worker_slot_t)));
     return 1;
 }
 

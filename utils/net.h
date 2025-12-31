@@ -15,9 +15,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "log.h"
+
 void flout_init_sockaddr_in6(struct sockaddr_in6 * addr, const char * host, const int port);
 int flout_check_socket_read(const int socket_fd, const time_t timeout);
 void flout_parse_address(struct sockaddr_in6 * addr, char * buffer, socklen_t buffer_size);
 int flout_create_outbound_socket(struct sockaddr * server_addr, const int queue_size, char * err_buf, const int err_buf_len);
+int flout_socket_read(int socket_fd, char * buffer, size_t buffer_size);
 
 #endif

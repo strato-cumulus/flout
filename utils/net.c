@@ -75,3 +75,38 @@ int flout_create_outbound_socket(struct sockaddr * server_addr, const int queue_
 
     return socket_fd;
 }
+
+
+int flout_socket_read(int socket_fd, char * buffer, size_t buffer_size)
+{
+    #define log_name "flout_socket_read"
+
+    int bytes_read = 0;
+    int bytes_written = 0;
+    int bytes_left;
+
+    do {
+        bytes_left = buffer_size - bytes_written;
+        if (bytes_left <= 0) {
+            bytes_written = buffer_size;
+            break;
+        }
+        bytes_read = read(socket_fd, buffer + bytes_written, bytes_left);
+        if (bytes_read < 0) {
+            if (errno == EAGAIN) {
+                // There is no data, so read throws because it cannot block.
+                // We interpret this as a regular end-of-stream in a non-blocking socket.
+                break;
+            }
+            return bytes_read;
+        }
+        bytes_written += bytes_read;
+    } while (bytes_read > 0);
+
+    // Put a guardian null, so that we can safely treat the buffer contents as a string.
+    buffer[(bytes_written >= buffer_size ? buffer_size - 1 : bytes_written)] = '\0';
+
+    return bytes_written;
+
+    #undef log_name
+}

@@ -8,14 +8,41 @@ const int worker_timeout_ms = 5000;
 // Free slots are set to zero.
 flout_worker_slot_t connected_workers[MAX_CONNECTED_WORKERS];
 
+struct sockaddr_in6 rpc_addr;
+struct sockaddr_in6 ui_addr;
+
+int rpc_socket_fd = -1;
+
 
 /**
  * Initialize global state.
  */
-void flout_coordinator_init()
+#define log_name "flout_coordinator_init"
+int flout_coordinator_init()
 {
     memset(connected_workers, 0, (sizeof (struct _flout_worker_slot_t)) * MAX_CONNECTED_WORKERS);
+
+    int ret_code = 0;
+    char address_buffer[INET6_ADDRSTRLEN];
+    int port;
+
+    const int socket_queue_size = 8;
+    char char_buffer[FLOUT_MAX_CMD_SIZE];
+
+    flout_init_sockaddr_in6(&rpc_addr, "::1", 8122);
+    flout_init_sockaddr_in6(&ui_addr, "::1", 8080);
+
+    rpc_socket_fd = flout_create_outbound_socket((struct sockaddr *)&rpc_addr, socket_queue_size, char_buffer, FLOUT_MAX_CMD_SIZE);
+    if (rpc_socket_fd < 0) {
+        log_message(INFO, log_name, "Failed to create outbound socket: %s", strerror(errno));
+        return rpc_socket_fd;
+    }
+
+    log_message(INFO, log_name, "Initialized RPC socket #%d listening at port %d", rpc_socket_fd, rpc_addr.sin6_port);
+
+    return 0;
 }
+#undef log_name
 
 
 /**
@@ -28,6 +55,8 @@ int flout_register_worker(int worker_rpc_socket_fd, char * char_buffer, const si
     struct sockaddr * addr_buffer, const size_t addr_buffer_size)
 {
     const char * log_name = "flout_register_worker";
+
+    log_message(DEBUG, log_name, "registering worker");
 
     flout_worker_slot_t * found_slot;
     int found_slot_id = -1;
@@ -153,24 +182,9 @@ void * flout_coordinator_registration_thread_fn(void *msg)
 {
     const char * log_name = "flout_coordinator_registration_thread_fn";
 
-    int rpc_socket_fd = 0;
-    int worker_rpc_connection_fd = 0;
-
-    const int socket_queue_size = 8;
-    const int char_buffer_size = 1024;
-    char char_buffer[char_buffer_size];
+    char char_buffer[INET6_ADDRSTRLEN];
 
     int ret_code = 0;
-    char address_buffer[INET6_ADDRSTRLEN];
-    int port;
-
-    struct sockaddr_in6 *server_addr = (struct sockaddr_in6 *) msg;
-
-    rpc_socket_fd = flout_create_outbound_socket((struct sockaddr *)server_addr, socket_queue_size, char_buffer, char_buffer_size);
-    if (rpc_socket_fd < 0) {
-        log_message(INFO, log_name, "Failed to create outbound socket: %s", strerror(errno));
-        return NULL;
-    }
 
     struct sockaddr_in6 addr_buffer = {0};
     socklen_t addr_buffer_size = sizeof(addr_buffer);
@@ -195,11 +209,9 @@ void * flout_coordinator_registration_thread_fn(void *msg)
         flout_parse_address(&addr_buffer, char_buffer, INET6_ADDRSTRLEN);
         log_message(INFO, log_name, "opening connection to a worker at %s", addr_buffer);
 
-        flout_register_worker(worker_rpc_socket_fd, char_buffer, char_buffer_size,
+        flout_register_worker(worker_rpc_socket_fd, char_buffer, FLOUT_MAX_CMD_SIZE,
             (struct sockaddr *) &addr_buffer, addr_buffer_size);
     }
-
-    close(rpc_socket_fd);
 }
 
 
@@ -295,16 +307,12 @@ void * flout_coordinator_ui_thread_fn(void * msg)
 
 int main(int argc, char* argv[])
 {
-    flout_coordinator_init();
-
-    struct sockaddr_in6 registration_addr;
-    struct sockaddr_in6 ui_addr;
-
-    flout_init_sockaddr_in6(&registration_addr, "::1", 8122);
-    flout_init_sockaddr_in6(&ui_addr, "::1", 8080);
+    if (flout_coordinator_init() < 0) {
+        return -1;
+    }
 
     pthread_t registration_thread;
-    pthread_create(&registration_thread, NULL, flout_coordinator_registration_thread_fn, (void*) &registration_addr);
+    pthread_create(&registration_thread, NULL, flout_coordinator_registration_thread_fn, NULL);
 
     pthread_t coordinator_sync_thread;
     pthread_create(&coordinator_sync_thread, NULL, flout_coordinator_sync_thread_fn, NULL);
@@ -319,6 +327,8 @@ int main(int argc, char* argv[])
     pthread_join(coordinator_sync_thread, NULL);
     pthread_join(coordinator_comms_thread, NULL);
     pthread_join(coordinator_ui_thread, NULL);
+
+    close(rpc_socket_fd);
 
     return 0;
 }

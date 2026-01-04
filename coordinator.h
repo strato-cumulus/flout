@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "rpc/command.h"
 #include "utils/err.h"
 #include "utils/log.h"
 #include "utils/net.h"

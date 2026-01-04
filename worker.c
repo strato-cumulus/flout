@@ -53,6 +53,8 @@ int flout_register(int worker_rpc_socket_fd, struct sockaddr_in6 * worker_rpc_ad
 {
     const char * log_name = "flout_register";
 
+    const int cmd_id = FLOUT_CMD_REGISTER;
+
     int n_read;
     int ret_value;
     struct timeval timeout = {0};
@@ -80,8 +82,18 @@ int flout_register(int worker_rpc_socket_fd, struct sockaddr_in6 * worker_rpc_ad
     if (ret_value < 0) {
         log_message(ERROR, log_name, "attempt to connect to coordinator failed: %s: shutting down",
             strerror(errno));
-        close(rpc_socket_fd);
-        return ret_value;
+        goto err_cleanup;
+    }
+
+    // Create and send the registration message.
+    memset(char_buffer, 0, char_buffer_size);
+    memcpy(char_buffer, &cmd_id, sizeof(int));
+
+    char_buffer[sizeof(int)] = '\4';
+
+    if (write(rpc_socket_fd, char_buffer, sizeof(int) + 1) <= 0) {
+        log_message(ERROR, log_name, "failed to send registration command: %s: shutting down", strerror(errno));
+        goto err_cleanup;
     }
 
     // Receive worker ID or error code on connection.
@@ -90,8 +102,7 @@ int flout_register(int worker_rpc_socket_fd, struct sockaddr_in6 * worker_rpc_ad
     if (ret_value < 0) {
         log_message(ERROR, log_name, "coordinator closed the connection without responding: %s: shutting down",
             strerror(errno));
-        close(rpc_socket_fd);
-        return ret_value;
+        goto err_cleanup;
     }
 
     // Terminate the string in case of overflow and parse the number.
@@ -100,11 +111,14 @@ int flout_register(int worker_rpc_socket_fd, struct sockaddr_in6 * worker_rpc_ad
 
     if (ret_value < 0) {
         log_message(ERROR, log_name, "coordinator returned an error: %d", ret_value);
-        close(rpc_socket_fd);
-        return ret_value;
+        goto err_cleanup;
     }
 
     // Return worker ID.
+    return ret_value;
+
+    err_cleanup:
+    close(rpc_socket_fd);
     return ret_value;
 }
 

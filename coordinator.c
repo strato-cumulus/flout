@@ -38,6 +38,12 @@ int flout_coordinator_init()
         return rpc_socket_fd;
     }
 
+    for (int i = 0; i < MAX_CONNECTED_WORKERS; ++i) {
+        flout_worker_slot_t * worker_slot = &connected_workers[i];
+
+        pthread_mutex_init(&worker_slot->mutex, NULL);
+    }
+
     log_message(INFO, log_name, "Initialized RPC socket #%d listening at port %d", rpc_socket_fd, rpc_addr.sin6_port);
 
     return 0;
@@ -50,6 +56,7 @@ int flout_coordinator_destroy()
 {
     for (int i = 0; i < MAX_CONNECTED_WORKERS; ++i) {
         flout_worker_slot_t * worker_slot = &connected_workers[i];
+        pthread_mutex_destroy(&worker_slot->mutex);
 
         if (worker_slot->status != SFLOUT_FREE) {
             close(worker_slot->socket_fd);
@@ -131,6 +138,8 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
 {
     const char * log_name = "flout_handle_rpc";
 
+    pthread_mutex_lock(&worker_slot->mutex);
+
     if (worker_slot->status == SFLOUT_FREE) {
         return 1;
     }
@@ -138,6 +147,7 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
     if (flout_check_socket_read(worker_slot->socket_fd, 0) >= 0) {
 
         int bytes_received = flout_socket_read(worker_slot->socket_fd, buffer, buffer_size);
+        pthread_mutex_unlock(&worker_slot->mutex);
 
         if (bytes_received < 0) {
             log_message(ERROR, log_name, "failed to fetch commands from worker %d: %s",
@@ -154,6 +164,9 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
         worker_slot->last_activity_ts = get_current_time_ms();
 
         // There are no known commands yet, so finish for now.
+    }
+    else {
+        pthread_mutex_unlock(&worker_slot->mutex);
     }
 
     return 0;
@@ -179,8 +192,10 @@ int flout_handle_liveness(const int worker_id, flout_worker_slot_t * worker_slot
 
     // Otherwise, the connection is closed and the slot is freed.
     log_message(INFO, log_name, "worker %d is gone, last activity was %d ms ago, disconnecting", worker_id, delta);
+    pthread_mutex_lock(&worker_slot->mutex);
     close(worker_slot->socket_fd);
     worker_slot->status = SFLOUT_FREE;
+    pthread_mutex_unlock(&worker_slot->mutex);
     
     return 1;
 }

@@ -18,6 +18,7 @@ typedef struct _flout_worker_slot_t {
     int status;
     int socket_fd;
     suseconds_t last_activity_ts;
+    pthread_mutex_t mutex;
 } flout_worker_slot_t;
 
 #define SFLOUT_FREE 0

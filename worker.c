@@ -133,7 +133,7 @@ int main(int argc, char* argv[])
     // Init an RPC socket for coordinator communication.
     // It will stay open for the entire lifetime of the worker.
     const char * worker_address = "::1";
-    const int worker_port = 8123;
+    const int worker_port = 0; // use an ephemeral port
     struct sockaddr_in6 worker_rpc_addr;
     flout_init_sockaddr_in6(&worker_rpc_addr, worker_address, worker_port);
 

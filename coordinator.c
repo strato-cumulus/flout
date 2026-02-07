@@ -121,16 +121,13 @@ int flout_handle_rpc(const int worker_id, flout_worker_slot_t * worker_slot, cha
 
         int bytes_received = flout_socket_read(worker_slot->socket_fd, buffer, buffer_size);
 
-        // If writer position did not advance, it means that there was no command sent.
-        if (bytes_received == 0) {
-            log_message(DEBUG, log_name, "no command from worker %d", worker_id);
-            return 0;
-        }
-
         if (bytes_received < 0) {
             log_message(ERROR, log_name, "failed to fetch commands from worker %d: %s",
                 worker_id, strerror(errno));
             return -1;
+        }
+        else if (bytes_received == 0) {
+            return 1;
         }
 
         log_message(DEBUG, log_name, "received a command from worker %d: %s", worker_id, buffer);
@@ -243,9 +240,9 @@ void * flout_coordinator_sync_thread_fn(void * msg)
 /**
  * Asynchronous communication with workers will be handled here.
  */
-void * flout_coordinator_comms_thread_fn(void * msg)
+void * flout_coordinator_rpc_thread_fn(void * msg)
 {
-    const char * log_name = "flout_coordinator_comms_thread_fn";
+    const char * log_name = "flout_coordinator_rpc_thread_fn";
 
     flout_worker_slot_t * worker_slot;
     const int char_buffer_size = 1024;
@@ -260,7 +257,6 @@ void * flout_coordinator_comms_thread_fn(void * msg)
                 flout_handle_rpc(i, worker_slot, char_buffer, char_buffer_size);
             }
         }
-        sleep(1);
     }
 }
 
@@ -317,15 +313,15 @@ int main(int argc, char* argv[])
     pthread_t coordinator_sync_thread;
     pthread_create(&coordinator_sync_thread, NULL, flout_coordinator_sync_thread_fn, NULL);
 
-    pthread_t coordinator_comms_thread;
-    pthread_create(&coordinator_comms_thread, NULL, flout_coordinator_comms_thread_fn, NULL);
+    pthread_t coordinator_rpc_thread;
+    pthread_create(&coordinator_rpc_thread, NULL, flout_coordinator_rpc_thread_fn, NULL);
 
     pthread_t coordinator_ui_thread;
     pthread_create(&coordinator_ui_thread, NULL, flout_coordinator_ui_thread_fn, (void*) &ui_addr);
 
     pthread_join(registration_thread, NULL);
     pthread_join(coordinator_sync_thread, NULL);
-    pthread_join(coordinator_comms_thread, NULL);
+    pthread_join(coordinator_rpc_thread, NULL);
     pthread_join(coordinator_ui_thread, NULL);
 
     close(rpc_socket_fd);

@@ -45,6 +45,24 @@ int flout_coordinator_init()
 #undef log_name
 
 
+#define log_name "flout_coordinator_destroy"
+int flout_coordinator_destroy()
+{
+    for (int i = 0; i < MAX_CONNECTED_WORKERS; ++i) {
+        flout_worker_slot_t * worker_slot = &connected_workers[i];
+
+        if (worker_slot->status != SFLOUT_FREE) {
+            close(worker_slot->socket_fd);
+        }
+    }
+
+    close(rpc_socket_fd);
+
+    return 0;
+}
+#undef log_name
+
+
 /**
  * Register the worker with the coordinator once communication has been established.
  * If there is a free spot in connected_workers, it will be written into
@@ -162,7 +180,8 @@ int flout_handle_liveness(const int worker_id, flout_worker_slot_t * worker_slot
     // Otherwise, the connection is closed and the slot is freed.
     log_message(INFO, log_name, "worker %d is gone, last activity was %d ms ago, disconnecting", worker_id, delta);
     close(worker_slot->socket_fd);
-    memset(&connected_workers[worker_id], 0, (sizeof (struct _flout_worker_slot_t)));
+    worker_slot->status = SFLOUT_FREE;
+    
     return 1;
 }
 
@@ -324,7 +343,7 @@ int main(int argc, char* argv[])
     pthread_join(coordinator_rpc_thread, NULL);
     pthread_join(coordinator_ui_thread, NULL);
 
-    close(rpc_socket_fd);
+    flout_coordinator_destroy();
 
     return 0;
 }
